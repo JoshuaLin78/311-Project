@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.linalg import sqrtm
 
 from utils import (
@@ -84,6 +85,15 @@ def update_u_z(train_data, lr, u, z):
     c = train_data["is_correct"][i]
     n = train_data["user_id"][i]
     q = train_data["question_id"][i]
+
+    # Compute prediction and error
+    pred = np.dot(u[n], z[q])
+    err = pred - c
+
+    # Update user and item vectors via SGD
+    u[n] -= lr * err * z[q]
+    z[q] -= lr * err * u[n]
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -113,11 +123,54 @@ def als(train_data, k, lr, num_iteration):
     # TODO:                                                             #
     # Implement the function as described in the docstring.             #
     #####################################################################
-    mat = None
+    # Perform stochastic updates
+    for _ in range(num_iteration):
+        u, z = update_u_z(train_data, lr, u, z)
+    mat = u @ z.T
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
     return mat
+
+
+def print_accuracy_table(title, k_list, acc_list):
+    """
+    Print accuracy results in table format.
+    """
+    print(f"\n{title}")
+    print("-" * 60)
+    print(f"{'k':<10} | {'Validation Accuracy':>20}")
+    print("-" * 60)
+    for k, acc in zip(k_list, acc_list):
+        print(f"{str(k):<10} | {acc:>20.4f}")
+    print("\n")
+
+
+def als_with_best_k(train_data, val_data, k, lr, num_iterations, loss_interval):
+    """Performs ALS algorithm with the optimal k found in Q3 part (d)
+        """
+    # Initialize u and z
+    u = np.random.uniform(
+        low=0, high=1 / np.sqrt(k), size=(len(set(train_data["user_id"])), k)
+    )
+    z = np.random.uniform(
+        low=0, high=1 / np.sqrt(k), size=(len(set(train_data["question_id"])), k)
+    )
+
+    train_losses = []
+    val_losses = []
+
+    for i in range(1, num_iterations + 1):
+        u, z = update_u_z(train_data, lr, u, z)
+
+        if i % loss_interval == 0:
+            train_loss = squared_error_loss(train_data, u, z)
+            val_loss = squared_error_loss(val_data, u, z)
+            train_losses.append(train_loss)
+            val_losses.append(val_loss)
+
+    final_matrix = np.dot(u, z.T)
+    return final_matrix, train_losses, val_losses
 
 
 def main():
@@ -131,7 +184,27 @@ def main():
     # (SVD) Try out at least 5 different k and select the best k        #
     # using the validation set.                                         #
     #####################################################################
-    pass
+
+    # Dimension of Σ is at most 542, choose k << 542
+    svd_k_vals = [10, 20, 50, 100, 120]
+    svd_val_accuracies = []
+    best_val_acc = 0
+    best_k_svd = None
+    best_svd_matrix = None
+
+    for k in svd_k_vals:
+        svd_matrix = svd_reconstruct(train_matrix, k)
+        val_acc = sparse_matrix_evaluate(val_data, svd_matrix)
+        svd_val_accuracies.append(val_acc)
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_k_svd = k
+            best_svd_matrix = svd_matrix
+
+    test_acc = sparse_matrix_evaluate(test_data, best_svd_matrix)
+    print_accuracy_table("SVD Reconstruction", svd_k_vals, svd_val_accuracies)
+    print(f"[SVD] Best k={best_k_svd}, Val Acc={best_val_acc:.4f}, Test Acc={test_acc:.4f}")
+
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
@@ -141,8 +214,49 @@ def main():
     # (ALS) Try out at least 5 different k and select the best k        #
     # using the validation set.                                         #
     #####################################################################
-    pass
-    #####################################################################
+
+    # Dimension of latent factors
+    als_k_vals = [10, 20, 50, 80, 100]
+    best_val_acc = 0
+    best_k_als = None
+
+    lr = 0.1
+    iterations = 350000
+    loss_interval = 10000
+    als_val_accuracies = []
+
+    for k in als_k_vals:
+        als_matrix = als(train_data, k=k, lr=lr, num_iteration=iterations)
+        val_acc = sparse_matrix_evaluate(val_data, als_matrix)
+        als_val_accuracies.append(val_acc)
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
+            best_k_als = k
+
+    print_accuracy_table("ALS with SGD", als_k_vals, als_val_accuracies)
+
+    # Part (e) final validation accuracy and test accuracy & Plotting
+
+    als_matrix, train_losses, val_losses = als_with_best_k(
+        train_data, val_data, k=best_k_als, lr=lr, num_iterations=iterations, loss_interval=loss_interval
+    )
+
+    val_acc = sparse_matrix_evaluate(val_data, als_matrix)
+    test_acc = sparse_matrix_evaluate(test_data, als_matrix)
+    print(f"\n[ALS] k={best_k_als}, Val Acc = {val_acc:.4f}, Test Acc = {test_acc:.4f}")
+
+    x = np.arange(1, len(train_losses) + 1) * loss_interval
+    plt.plot(x, train_losses, label="Train Loss")
+    plt.plot(x, val_losses, label="Validation Loss")
+    plt.xlabel("Iterations")
+    plt.ylabel("Squared Error Loss")
+    plt.title(f"ALS with SGD (k={best_k_als},lr={lr})")
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+#####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
 

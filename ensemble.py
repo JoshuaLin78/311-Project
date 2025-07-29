@@ -2,7 +2,7 @@ import numpy as np
 from utils import load_train_csv, load_valid_csv, load_public_test_csv, load_train_sparse
 from knn import knn_impute_by_user
 from item_response import irt, evaluate as irt_evaluate, sigmoid
-from matrix_factorization import svd_reconstruct
+from matrix_factorization import als
 
 def bootstrap_data(data):
     n = len(data["user_id"])
@@ -43,9 +43,10 @@ def main():
     theta2, beta2, _, _, _ = irt(bs2, val_data, lr=0.01, iterations=50)
     preds2_train = np.array([sigmoid(theta2[u] - beta2[q]) for u, q in zip(test_data["user_id"], test_data["question_id"])])
     preds2_valid = np.array([sigmoid(theta2[u] - beta2[q]) for u, q in zip(val_data["user_id"], val_data["question_id"])])
-    # bagged model 3: SVD
-    preds3_train = ...
-    preds3_valid = ...
+    # bagged model 3: ALS with SGD
+    bagged_als = als(train_data=bs3, k=100, lr=0.1, num_iteration=350000)
+    preds3_train = np.array([bagged_als[u, q] for u, q in zip(test_data["user_id"], test_data["question_id"])])
+    preds3_valid = np.array([bagged_als[u, q] for u, q in zip(val_data["user_id"], val_data["question_id"])])
 
     #ensemble by averaging probabilities
     avg_probs_train = (preds1_train + preds2_train + preds3_train) / 3
