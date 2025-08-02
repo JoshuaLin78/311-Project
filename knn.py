@@ -26,8 +26,8 @@ def knn_impute_by_user(matrix, valid_data, k):
     # We use NaN-Euclidean distance measure.
     mat = nbrs.fit_transform(matrix)
     acc = sparse_matrix_evaluate(valid_data, mat)
-    print("Validation Accuracy: {}".format(acc))
     return acc
+
 
 
 def knn_impute_by_item(matrix, valid_data, k):
@@ -54,7 +54,6 @@ def knn_impute_by_item(matrix, valid_data, k):
     mat = mat_T.T
 
     acc = sparse_matrix_evaluate(valid_data, mat)
-    print(f"Validation Accuracy (Item-based, k={k}): {acc}")
     return acc
 
 
@@ -83,6 +82,7 @@ def main():
     for k in k_list:
         acc = knn_impute_by_user(sparse_matrix, val_data, k)
         val_acc_user.append(acc)
+        print("Validation Accuracy: {}".format(acc))
 
     # Find best k for user-based
     best_k_user = k_list[np.argmax(val_acc_user)]
@@ -99,6 +99,7 @@ def main():
     for k in k_list:
         acc = knn_impute_by_item(sparse_matrix, val_data, k)
         val_acc_item.append(acc)
+        print(f"Validation Accuracy (Item-based, k={k}): {acc}")
 
     best_k_item = k_list[np.argmax(val_acc_item)]
     print(f"Best k for item-based = {best_k_item}")
