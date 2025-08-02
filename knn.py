@@ -44,10 +44,17 @@ def knn_impute_by_item(matrix, valid_data, k):
     # TODO:                                                             #
     # Implement the function as described in the docstring.             #
     #####################################################################
-    acc = None
-    #####################################################################
-    #                       END OF YOUR CODE                            #
-    #####################################################################
+    # Transpose so rows = questions, columns = students
+    matrix_T = matrix.T
+
+    nbrs = KNNImputer(n_neighbors=k)
+    mat_T = nbrs.fit_transform(matrix_T)
+
+    # Transpose back so rows = students, columns = questions
+    mat = mat_T.T
+
+    acc = sparse_matrix_evaluate(valid_data, mat)
+    print(f"Validation Accuracy (Item-based, k={k}): {acc}")
     return acc
 
 
@@ -67,7 +74,47 @@ def main():
     # the best performance and report the test accuracy with the        #
     # chosen k*.                                                        #
     #####################################################################
-    pass
+    # Different k values
+    k_list = [1, 6, 11, 16, 21, 26]
+    val_acc_user = []
+
+    # === User-based KNN ===
+    print("Running User-based KNN...")
+    for k in k_list:
+        acc = knn_impute_by_user(sparse_matrix, val_data, k)
+        val_acc_user.append(acc)
+
+    # Find best k for user-based
+    best_k_user = k_list[np.argmax(val_acc_user)]
+    print(f"Best k for user-based = {best_k_user}")
+
+    # Test accuracy with best k
+    final_matrix_user = KNNImputer(n_neighbors=best_k_user).fit_transform(sparse_matrix)
+    test_acc_user = sparse_matrix_evaluate(test_data, final_matrix_user)
+    print(f"Test Accuracy (User-based) = {test_acc_user}")
+
+    # part c: item-based KNN
+    val_acc_item = []
+    print("\nRunning Item-based KNN...")
+    for k in k_list:
+        acc = knn_impute_by_item(sparse_matrix, val_data, k)
+        val_acc_item.append(acc)
+
+    best_k_item = k_list[np.argmax(val_acc_item)]
+    print(f"Best k for item-based = {best_k_item}")
+    final_matrix_item = KNNImputer(n_neighbors=best_k_item).fit_transform(sparse_matrix.T).T
+    test_acc_item = sparse_matrix_evaluate(test_data, final_matrix_item)
+    print(f"Test Accuracy (Item-based) = {test_acc_item}")
+
+    # Plot both user- and item-based on same graph
+    plt.plot(k_list, val_acc_user, marker='o', label="User-based KNN")
+    plt.plot(k_list, val_acc_item, marker='s', label="Item-based KNN")
+    plt.xlabel("k")
+    plt.ylabel("Validation Accuracy")
+    plt.title("Validation Accuracy vs k")
+    plt.grid(True)
+    plt.legend()
+    plt.show()
     #####################################################################
     #                       END OF YOUR CODE                            #
     #####################################################################
