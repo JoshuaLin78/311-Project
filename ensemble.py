@@ -37,31 +37,31 @@ def main():
     mat3 = build_matrix(bs3)
 
     # bagged model 1: KNN
-    preds1_train = ...
+    preds1_test = ...
     preds1_valid = ...
     # bagged model 2: IRT
     theta2, beta2, _, _, _ = irt(bs2, val_data, lr=0.01, iterations=50)
-    preds2_train = np.array([sigmoid(theta2[u] - beta2[q]) for u, q in zip(test_data["user_id"], test_data["question_id"])])
+    preds2_test = np.array([sigmoid(theta2[u] - beta2[q]) for u, q in zip(test_data["user_id"], test_data["question_id"])])
     preds2_valid = np.array([sigmoid(theta2[u] - beta2[q]) for u, q in zip(val_data["user_id"], val_data["question_id"])])
     # bagged model 3: ALS with SGD
     bagged_als = als(train_data=bs3, k=100, lr=0.1, num_iteration=350000)
-    preds3_train = np.array([bagged_als[u, q] for u, q in zip(test_data["user_id"], test_data["question_id"])])
+    preds3_test = np.array([bagged_als[u, q] for u, q in zip(test_data["user_id"], test_data["question_id"])])
     preds3_valid = np.array([bagged_als[u, q] for u, q in zip(val_data["user_id"], val_data["question_id"])])
 
     #ensemble by averaging probabilities
-    avg_probs_train = (preds1_train + preds2_train + preds3_train) / 3
+    avg_probs_test = (preds1_test + preds2_test + preds3_test) / 3
     avg_probs_valid = (preds1_valid + preds2_valid + preds3_valid) / 3
 
-    final_preds_train = []
+    final_preds_test = []
     final_preds_valid = []
-    for prob_train, prob_valid in zip(avg_probs_train, avg_probs_valid):
-        final_preds_train.append(prob_train >= 0.5)
+    for prob_test, prob_valid in zip(avg_probs_test, avg_probs_valid):
+        final_preds_test.append(prob_test >= 0.5)
         final_preds_valid.append(prob_valid >= 0.5)
         
 
-    train_acc = np.mean(final_preds_train == np.array(test_data["is_correct"]))
+    test_acc = np.mean(final_preds_test == np.array(test_data["is_correct"]))
     valid_acc = np.mean(final_preds_valid == np.array(val_data["is_correct"]))
-    print(f"Ensemble Test Accuracy: {train_acc:.4f}")
+    print(f"Ensemble Test Accuracy: {test_acc:.4f}")
     print(f"Ensemble Val Accuracy: {valid_acc:.4f}")
 
 
