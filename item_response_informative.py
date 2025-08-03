@@ -28,7 +28,7 @@ def neg_log_likelihood(data, theta, beta, alpha):
 
     log_lklihood = 0.0
     epsilon = 1e-8
-    reg_strength = 10
+    reg_strength = 0.5
 
     # Iterate through each data point
     for k in range(len(data["user_id"])):
@@ -43,8 +43,8 @@ def neg_log_likelihood(data, theta, beta, alpha):
         # add to log-likelihood
         log_lklihood += c_ij * np.log(p_ij) + (1 - c_ij) * np.log(1 - p_ij)
 
-    # L2 regularization on alpha
-    log_lklihood -= reg_strength * np.sum(alpha ** 2)
+        # L2 regularization on theta, beta, and alpha
+    log_lklihood -= reg_strength * (np.sum(theta ** 2) + np.sum(beta ** 2) + np.sum(alpha ** 2))
     return -log_lklihood
 
 
@@ -66,7 +66,7 @@ def update_theta_beta(data, lr, theta, beta, alpha):
     :param alpha: Vector
     :return: tuple of vectors
     """
-    reg_strength = 10
+    reg_strength = 0.5
 
     # initialize gradients
     theta_grad = np.zeros_like(theta)
@@ -85,20 +85,22 @@ def update_theta_beta(data, lr, theta, beta, alpha):
         diff = c_ij - p_ij
 
         # gradient of neg log-likelihood w.r.t. theta_i
-        theta_grad[i] += alpha[j] * diff
+        theta_grad[i] += -alpha[j] * diff
 
         # gradient of neg log-likelihood w.r.t. beta_j
-        beta_grad[j] += -alpha[j] * diff
+        beta_grad[j] += alpha[j] * diff
 
         # gradient of neg log-likelihood w.r.t. alpha_j
-        alpha_grad[j] += (theta[i] - beta[j]) * diff
+        alpha_grad[j] += -(theta[i] - beta[j]) * diff
+
+    # L2 regularization gradient
+    theta_grad += 2 * reg_strength * theta
+    beta_grad += 2 * reg_strength * beta
+    alpha_grad += 2 * reg_strength * alpha
 
     # update parameters
     theta = theta - lr * theta_grad
     beta = beta - lr * beta_grad
-
-    # Add regularization gradient for alpha
-    alpha_grad += 2 * reg_strength * alpha
 
     # Prevent alpha_j growing too large
     alpha -= lr * alpha_grad
@@ -127,30 +129,33 @@ def irt(data, val_data, lr, iterations):
     # assume student abilities (theta) and question difficulty (beta) is normally distributed around 0
     theta = np.random.normal(0, 1, num_students)
     beta = np.random.normal(0, 1, num_questions)
-    alpha = np.ones(num_questions)  # initialize informativeness
+
+    # assume question informativeness is uniformly distributed
+    alpha = np.ones(num_questions)
 
     val_acc_lst = []
     train_neg_lld_lst = []
     val_neg_lld_lst = []
+    train_acc_lst = []
 
     for i in range(iterations):
         # Calculate negative log-likelihoods BEFORE updating parameters
         train_neg_lld = neg_log_likelihood(data, theta=theta, beta=beta, alpha=alpha)
         val_neg_lld = neg_log_likelihood(val_data, theta=theta, beta=beta, alpha=alpha)
-        score = evaluate(data=val_data, theta=theta, beta=beta, alpha=alpha)
+        train_score = evaluate(data=data, theta=theta, beta=beta, alpha=alpha)
+        val_score = evaluate(data=val_data, theta=theta, beta=beta, alpha=alpha)
+
 
         # Store values
-        val_acc_lst.append(score)
+        train_acc_lst.append(train_score)
+        val_acc_lst.append(val_score)
         train_neg_lld_lst.append(train_neg_lld)
         val_neg_lld_lst.append(val_neg_lld)
-
-        # print("NLLK: {} \t Score: {}".format(train_neg_lld, score))
 
         # Update parameters
         theta, beta, alpha = update_theta_beta(data, lr, theta, beta, alpha)
 
-    # TODO: You may change the return values to achieve what you want.
-    return theta, beta, alpha, val_acc_lst, train_neg_lld_lst, val_neg_lld_lst
+    return theta, beta, alpha, train_acc_lst, val_acc_lst, train_neg_lld_lst, val_neg_lld_lst
 
 
 def evaluate(data, theta, beta, alpha):
@@ -180,38 +185,34 @@ def main():
     test_data = load_public_test_csv("./data")
 
     # hyperparameters
-    lr = 0.00005
-    iterations = 50
-
-    print(f"Training IRT model with lr={lr}, iterations={iterations}")
-
-    # track training and validation log-likelihoods for plotting
-    train_neg_lld_list = []
-    val_neg_lld_list = []
+    lr, iterations = 0.04, 60
 
     np.random.seed(42)
 
-    theta, beta, alpha, val_acc_lst, train_neg_lld_list, val_neg_lld_list = irt(train_data, val_data, lr, iterations)
+    theta, beta, alpha, train_acc_lst, val_acc_lst, train_neg_lld_list, val_neg_lld_list = irt(train_data, val_data, lr, iterations)
 
+    final_train_acc = evaluate(data=train_data, theta=theta, beta=beta, alpha=alpha)
     final_val_acc = evaluate(val_data, theta, beta, alpha)
     final_test_acc = evaluate(test_data, theta, beta, alpha)
 
     print(f"\nFinal Results:")
+    print(f"Train Accuracy: {final_train_acc:.4f}")
     print(f"Validation Accuracy: {final_val_acc:.4f}")
     print(f"Test Accuracy: {final_test_acc:.4f}")
     print(f"Selected Hyperparameters: lr={lr}, iterations={iterations}")
 
-    # plot Validation Accuracy
+    # plot Training and Validation Accuracy
+
     plt.figure(figsize=(10, 6))
-    plt.plot(range(1, len(val_acc_lst) + 1), val_acc_lst, 'g-', label='Validation Accuracy', linewidth=2)
+    plt.plot(range(1, len(val_acc_lst) + 1), val_acc_lst, 'r-', label=f'Val Acc', linewidth=2)
+    plt.plot(range(1, len(train_acc_lst) + 1), train_acc_lst, 'b--', label=f'Train Acc', linewidth=2)
     plt.xlabel('Iteration')
     plt.ylabel('Accuracy')
-    plt.title('Validation Accuracy')
+    plt.title('Training and Validation Accuracy')
     plt.legend()
     plt.grid(True, alpha=0.3)
     plt.tight_layout()
     plt.show()
-
 
 if __name__ == "__main__":
     main()
